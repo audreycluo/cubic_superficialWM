@@ -1,0 +1,183 @@
+---
+title: "Superficial White Matter Age Effect"
+author: "Audrey Luo"
+date: "2024-05-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(ciftiTools)
+#ciftiTools.setOption('wb_path', '/Applications/workbench/')
+library(cifti)
+library(cowplot)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(gratia)
+library(mgcv)
+library(RColorBrewer)
+library(stringr)
+library(tidyr)
+
+library(ggseg)
+library(ggsegGlasser)
+library(ggsegSchaefer)
+source("/cbica/projects/luo_wm_dev/software/spin_test/perm.sphere.p.R")
+
+```
+ 
+ 
+```{r}
+schaefer_md_age_effect <- read.csv("/cbica/projects/luo_wm_dev/output/HCPD/superficialWM/GAM/md/schaefer400_SWM_md_age_effect.csv", header=F)
+names(schaefer_md_age_effect) <- "s_age.delta.adj.rsq_signed"
+
+glasser_md_age_effect <- read.csv("/cbica/projects/luo_wm_dev/output/HCPD/superficialWM/GAM/md/glasser_SWM_md_age_effect.csv", header=F)
+glasser_md_age_effect_partialrsq <- read.csv("/cbica/projects/luo_wm_dev/output/HCPD/superficialWM/GAM/md/glasser_SWM_md_age_effect_partialrsq.csv", header=F)
+names(glasser_md_age_effect_partialrsq) <- "partial_rsq"
+
+glasser_md_age_effect_unsigned <- read.csv("/cbica/projects/luo_wm_dev/output/HCPD/superficialWM/GAM/md/glasser_SWM_md_age_effect_unsigned.csv", header=F)
+names(glasser_md_age_effect_unsigned) <- "unsigned_delta_adj_rsq"
+
+
+
+alff_age_effects = read.csv("/cbica/projects/luo_wm_dev/input/HCPD/cortical_data/alff/alff_age_effect.csv")
+
+schaefer_md_age_effect <- cbind(schaefer_md_age_effect, alff_age_effects$region) %>% setNames(c("s_age.delta.adj.rsq_signed", "region"))
+ 
+
+glasser.parcel.labels <- read.csv('/cbica/projects/luo_wm_dev/atlases/glasser/glasser360_regionlist_final.csv')
+
+
+schaefer400_SAaxis <- read.csv("/cbica/projects/luo_wm_dev/SAaxis/schaefer400x7_SAaxis.csv")
+glasser_SAaxis <- read.csv("/cbica/projects/luo_wm_dev/SAaxis/glasser_SAaxis.csv")
+
+ 
+```
+ 
+ 
+```{r}
+ggseg(.data = schaefer_md_age_effect, atlas = "schaefer7_400", 
+      mapping = aes(fill = s_age.delta.adj.rsq_signed)) + 
+        theme_void() + 
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red", guide = "colourbar", aesthetics = "fill", midpoint = 0)
+
+
+```
+ 
+```{r}
+r_df.dev <-  df.dev
+    r_df.dev$region<- gsub(x = r_df.dev$region, pattern = "R_", replacement = "")
+    r_df.dev$region <-  gsub(x = r_df.dev$region, pattern = "_ROI", replacement = "")
+    r_df.dev <- r_df.dev[-which(grepl("L_", r_df.dev$region)),]
+    
+    l_df.dev <-  df.dev
+    l_df.dev$region<- gsub(x = l_df.dev$region, pattern = "L_", replacement = "")
+    l_df.dev$region <-  gsub(x = l_df.dev$region, pattern = "_ROI", replacement = "")
+    l_df.dev <- l_df.dev[-which(grepl("R_", l_df.dev$region)),]
+    
+    
+    r_glasser_ageEffect <- ggplot() + geom_brain(data=r_df.dev, 
+                                                 atlas=get(ggseg_atlas), 
+                                                 mapping=aes(fill=GAM.age.AdjRsq), 
+                                                 show.legend=TRUE, 
+                                                 hemi = "right") + 
+      scale_fill_gradientn(colors= c("#00A3A7FF", "#FFFFFF","#C75DAAFF"), 
+                           limits = range(df.dev$GAM.age.AdjRsq), 
+                           values=rescale(c(min(df.dev$GAM.age.AdjRsq),0,max(df.dev$GAM.age.AdjRsq)))) +
+      theme_void()
+    
+    l_glasser_ageEffect <- ggplot() + geom_brain(data=l_df.dev, 
+                                                 atlas=glasser, 
+                                                 mapping=aes(fill=GAM.age.AdjRsq), 
+                                                 show.legend=TRUE, 
+                                                 hemi = "left") + 
+      labs(title = paste(atlas, metric)) +
+      scale_fill_gradientn(colors= c("#00A3A7FF", "#FFFFFF","#C75DAAFF"), 
+                           limits = range(df.dev$GAM.age.AdjRsq), 
+                           values=rescale(c(min(df.dev$GAM.age.AdjRsq),0,max(df.dev$GAM.age.AdjRsq)))) +
+      theme_void()
+```
+ 
+```{r}
+cor.test(schaefer_md_age_effect$s_age.delta.adj.rsq_signed, alff_age_effects$hcpd)
+```
+ 
+```{r load t1 t2}
+t1_t2_cifti <- read_cifti("/cbica/projects/luo_wm_dev/input/HCPD/cortical_data/t1_t2/Figure3_T1wT2w_sAge_partial_bayes_r2.pscalar.nii")
+
+
+cor.test(t1_t2_cifti$data, glasser_md_age_effect$V1)
+
+cor.test(t1_t2_cifti$data, glasser_md_age_effect_partialrsq$partial_rsq)
+
+t1_t2_data <- data.frame(t1_t2_cifti$data)
+```
+ 
+ 
+```{r}
+# spin test
+perm.id.full_glasser <- readRDS("/cbica/projects/luo_wm_dev/software/spin_test/rotate_parcellation/glasser.coords_sphericalrotations_N10k.rds")
+ 
+perm.id.full_schaefer400 <- readRDS("/cbica/projects/luo_wm_dev/software/spin_test/rotate_parcellation/schaefer400x7.coords_sphericalrotations_N10k.rds")
+# make df.dev.spin
+parcel.labels <- glasser.parcel.labels$label
+
+
+  
+glasser_md_age_effect_partialrsq$test <- 1
+df.dev.spin_md <- rbind(glasser_md_age_effect_partialrsq[1:c(length(parcel.labels)/2),], glasser_md_age_effect_partialrsq[c(length(parcel.labels)/2+1):length(parcel.labels),])  
+
+
+t1_t2_data$test <- 1
+df.dev.spin_t1t2 <- rbind(t1_t2_data[1:c(length(parcel.labels)/2),], t1_t2_data[c(length(parcel.labels)/2+1):length(parcel.labels),])
+ 
+# spatial correlation of GAM adjusted age Rsq between all pairs of datasets
+cor.test(t1_t2_cifti$data, glasser_md_age_effect_partialrsq$partial_rsq, method=c("pearson"), exact=F)$estimate # r = -0.4291657
+
+cor.test(t1_t2_cifti$data, glasser_md_age_effect_unsigned$V1, method=c("pearson"), exact=F) # r = -0.4291657 for unsigned
+
+cor.test(schaefer400_SAaxis$SA.axis_rank, schaefer_md_age_effect$s_age.delta.adj.rsq_signed, method=c("spearman"), exact=F) # r = -0.4291657 for unsigned
+
+cor.test(t1_t2_cifti$data, glasser_md_age_effect_unsigned$V1, method=c("pearson"), exact=F) # r = -0.4291657 for unsigned
+
+cor.test(glasser_SAaxis$SA.axis_rank, glasser_md_age_effect_partialrsq$partial_rsq, method=c("spearman"), exact=F) # r = 0.2381052 - partial rsq, unsigned
+cor.test(glasser_SAaxis$SA.axis_rank, glasser_md_age_effect$V1, method=c("spearman"), exact=F) # r = -0.2186626 
+
+cor.test(alff_age_effects$hcpd, schaefer_md_age_effect$s_age.delta.adj.rsq_signed, method=c("pearson"), exact=F) # r = -0.09076011 
+
+
+######### 
+# t1/t2 #
+######### 
+perm.sphere.p(as.numeric(t1_t2_data$t1_t2_cifti.data), as.numeric(glasser_md_age_effect$V1), perm.id.full_glasser, corr.type='pearson')
+# strange, the t1/t2 age effect seems to have had no sign -- no equivalent linear model used
+
+perm.sphere.p(as.numeric(t1_t2_data$t1_t2_cifti.data), as.numeric(glasser_md_age_effect_partialrsq$partial_rsq), perm.id.full_glasser, corr.type='pearson') # r = -0.4291657, pspin = 0.04
+
+perm.sphere.p(as.numeric(df.dev.spin_t1t2$t1_t2_cifti.data), as.numeric(df.dev.spin_md$partial_rsq), perm.id.full_glasser, corr.type='pearson')
+
+
+perm.sphere.p(as.numeric(t1_t2_data$t1_t2_cifti.data), as.numeric(glasser_md_age_effect_unsigned$V1), perm.id.full_glasser, corr.type='pearson') # r = -0.4291657, pspin = 0.044
+
+
+######### 
+# alff #
+######### 
+perm.sphere.p(as.numeric(alff_age_effects$hcpd), as.numeric(schaefer_md_age_effect$s_age.delta.adj.rsq_signed), perm.id.full_schaefer400, corr.type='pearson') # r = -0.09076011, pspin = 0.0405
+
+########### 
+# sa axis #
+########### 
+# sa axis out of the picture lol
+perm.sphere.p(as.numeric(glasser_SAaxis$SA.axis_rank), as.numeric(glasser_md_age_effect$V1), perm.id.full_glasser, corr.type='spearman') # r = -0.2186626 , pspin = 0.144 lol 
+
+perm.sphere.p(as.numeric(glasser_SAaxis$SA.axis_rank), as.numeric(glasser_md_age_effect_partialrsq$partial_rsq), perm.id.full_glasser, corr.type='spearman') # r = 0.2381052, pspin = 0.13 lol 
+
+
+
+```
+ 

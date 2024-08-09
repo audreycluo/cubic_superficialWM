@@ -1,0 +1,2 @@
+dataset ,data_root, outputs_root,demographics_file, qc_file,tract_profiles_data_root,tract_profiles_outputs_root
+ HBN,/cbica/projects/luo_wm_dev/input/HBN,/cbica/projects/luo_wm_dev/output/HBN/superficialWM,/cbica/projects/luo_wm_dev/input/HBN/sample_selection_files/HBN_WMDev_FinalSampleDemographics_N1216_age5to22.csv,/cbica/projects/luo_wm_dev/input/HBN/sample_selection_files/HBN_WMDev_FinalSampleQCMetrics_N1216_age5to22.csv,/cbica/projects/luo_wm_dev/input/HBN/HBN_tractprofiles,/cbica/projects/luo_wm_dev/output/HBN/tract_profiles
